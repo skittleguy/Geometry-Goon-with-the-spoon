@@ -2,6 +2,7 @@
     const State = {
         NoclipEnabled: false,
         PlatformerEnabled: false,
+        HitboxEnabled: false,
         physicsFixedDt: 1 / 240,
         gravityMul: 1.916398
     };
@@ -156,6 +157,7 @@
     };
 
     addToggle("Noclip", "NoclipEnabled");
+    addToggle("Show Hitboxes", "HitboxEnabled");
     addToggle("Platformer", "PlatformerEnabled");
     addInput("TPS", "physicsFixedDt", true);
     addInput("Gravity", "gravityMul", false);
@@ -5977,7 +5979,69 @@ var Game = new Class({
         var renderer = this.renderer;
         renderer.preRender();
         eventEmitter.emit(Events.PRE_RENDER, renderer, time, delta);
-        this.scene.render(renderer);
+this.scene.render(renderer); 
+
+        // --- HITBOX DEBUGGER (V8 - RECURSIVE SEARCH) ---
+        try {
+            const activeScene = this.scene.getScenes(true)[0]; 
+            const state = window.DihclipseState;
+
+            if (activeScene && state && state.HitboxEnabled) {
+                if (!activeScene.debugGraphics) {
+                    activeScene.debugGraphics = activeScene.add.graphics().setDepth(9999999);
+                }
+                const dg = activeScene.debugGraphics;
+                dg.clear();
+
+                // 1. DRAW PLAYER (CLEAN SINGLE BOX)
+                const p = window.currentPhysics || activeScene.p;
+                if (p) {
+                    dg.lineStyle(2, 0x00ff00, 1);
+                    // Use core width/height to avoid drawing the 4 sensors
+                    dg.strokeRect(p.x - (p.width / 2), p.y - (p.height / 2), p.width, p.height);
+                }
+
+                // 2. FIND OBJECTS (FORCE SEARCH)
+                // We check the physics list first (accurate), then the scene list (visual)
+                let list = [];
+                if (p && p.activeObjects) list = p.activeObjects;
+                else if (activeScene.objs) list = activeScene.objs;
+                else if (activeScene.children) list = activeScene.children.list;
+
+                list.forEach(obj => {
+                    // Filter out the player, the graphics layer, and non-objects
+                    if (!obj || obj === p || obj === dg || obj.type === 'deco') return;
+
+                    // Color based on Hazard (Spikes) or Solid (Blocks)
+                    let color = 0x00ffff; // Cyan
+                    const isHazard = obj.type === 'hazard' || obj.isHazard || (obj.frame && obj.frame.name && obj.frame.name.includes('spike'));
+                    if (isHazard) color = 0xff0000; // Red
+                    else if (obj.type === 'pad' || obj.type === 'orb') color = 0xff00ff; // Pink
+
+                    dg.lineStyle(1, color, 0.8);
+
+                    // Dimensions logic: 
+                    // Physics objects use .width; Sprites use .displayWidth
+                    const w = obj.width || obj.displayWidth || 30;
+                    const h = obj.height || obj.displayHeight || 30;
+
+                    // Offset logic:
+                    // Physics objects are usually Top-Left (0 offset)
+                    // Visual Sprites are usually Center (requires offset)
+                    const offX = (obj.originX !== undefined && !p.activeObjects) ? (w * obj.originX) : 0;
+                    const offY = (obj.originY !== undefined && !p.activeObjects) ? (h * obj.originY) : 0;
+
+                    dg.strokeRect(obj.x - offX, obj.y - offY, w, h);
+                });
+
+            } else if (activeScene && activeScene.debugGraphics) {
+                activeScene.debugGraphics.clear();
+            }
+        } catch (err) {
+            // Failsafe to prevent the 'Black Screen' or 'No Hitbox' crash
+        }
+        // --- END ---
+
         renderer.postRender();
         eventEmitter.emit(Events.POST_RENDER, renderer, time, delta);
     },
@@ -103684,6 +103748,7 @@ _createSprites() {
                 }
               }
             }
+             /*/
             if (rect.type === "pad") {
               // grav
               this.p.yVelocity = this.p.gravityFlipped ? -45 : 33;
@@ -103702,10 +103767,41 @@ _createSprites() {
                   this.p.setAnimation("jump");
               }
 
-              console.log("GD Pad Force Applied: 19");
+              console.log("test");
               continue;
             }
+            */
+           if (rect.type === "pad") {
+    // 1. Calculate GD-accurate force 
+    // (1.422 * 22.360064 = ~31.8)
+    const padForce = 31.8;
+    this.p.yVelocity = this.p.gravityFlipped ? -padForce : padForce;
 
+    // 2. Reset states so the physics engine allows the upward arc
+    this.p.onGround = false;
+    this.p.isJumping = true;
+    this.p.canJump = false; // Prevents "double jump" glitch while touching the pad
+    
+    // 3. Update position tracking
+    this.p.lastY = this.p.y; 
+    
+    // 4. CRITICAL FIX: landedOnSolid must be false!
+    // If true, the engine thinks you are standing still and might cancel the jump.
+    landedOnSolid = false; 
+
+    // 5. Trigger animation
+    if (this.p.setAnimation) {
+        this.p.setAnimation("jump");
+    }
+
+    // Optional: Nudge the player out of the pad slightly to ensure the collision 
+    // doesn't re-trigger on the very next frame.
+    const nudge = 2;
+    this.p.y += this.p.gravityFlipped ? -nudge : nudge;
+
+    console.log("Yellow Pad Triggered: Velocity " + padForce);
+    continue;
+}
           } else if (!rect.activated) {
             rect.activated = true;
             this._playPortalShine(rect);

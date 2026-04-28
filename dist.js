@@ -99267,7 +99267,7 @@ const s = t(e ? i.exports : (e = 1, i.exports = (() => {
   }();
   return requireModule(85454);
 })()));
-const spriteQuality = "hd"; // ld or hd
+const spriteQuality = "ld"; // ld or hd
 let gameWidth = Math.round(10240 / 9);
 const gameHeight = 640;
 const renderScale = spriteQuality === "hd" ? 2 : 1;
@@ -104834,7 +104834,24 @@ const gameConfig = {
     scale: {mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH},
     scene: [BootScene, LoadingScene, GameScene]
 };
-const game = new Phaser.Game(gameConfig);
+
+//const game = new Phaser.Game(gameConfig);
+
+
+// 1. Setup the SDK (this checks if we are in Discord or just a browser)
+const discordSdk = window.discordSdk ? new window.discordSdk.DiscordSDK("1498804679881130154") : null;
+
+async function start() {
+    // 2. If we are in Discord, wait for it to be ready
+    if (discordSdk && window.self !== window.top) {
+        await discordSdk.ready();
+    }
+
+    // 3. Start the game
+    new Phaser.Game(gameConfig);
+}
+
+start();
 
 
 

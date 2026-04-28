@@ -104830,7 +104830,7 @@ const gameConfig = {
     backgroundColor: "#000000",
     parent: document.body,
     input: {windowEvents: false},
-    render: {powerPreference: "high-performance"},
+    render: {powerPreference: "default"},
     scale: {mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH},
     scene: [BootScene, LoadingScene, GameScene]
 };
